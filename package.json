@@ -8,13 +8,10 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/shibina3/yummymart-backend.git"
-  },
-  "bugs": {
-    "url": "https://github.com/shibina3/yummymart-backend/issues"
-  },
-  "homepage": "https://github.com/shibina3/yummymart-backend#readme",
-  "description": ""
+  "description": "",
+  "dependencies": {
+    "express": "^4.21.1",
+    "pg": "^8.13.1",
+    "serverless-http": "^3.2.0"
+  }
 }
