@@ -14,9 +14,11 @@ module.exports = {
 
         app.post('/get/products', async (req, res) => {
             try {
-                const result = await productsData.getProducts();
+                const { category } = req.body;
+                const result = await productsData.getProducts(category);
                 res.status(200).send(result);
             } catch (error) {
+                console.log("Error: ", error);
                 res.status(500).send(error);
             }
         });

@@ -8,14 +8,16 @@ module.exports = {
                 const result = await userData.registerUser(user);
                 res.status(201).send(result);
             } catch (error) {
+                console.log("Error: ", error);
                 res.status(500).send(error);
             }
         });
 
         app.post('/login/user', async (req, res) => {
-            try {
-                const { email, password } = req.body;
-                const user = await userData.getUserByEmail(email);
+            try {                
+                const { emailOrMob, password } = req.body;
+                const user = await userData.getUserByEmailOrMob(emailOrMob);
+                
                 if (user.password === password) {
                     res.status(200).send(user);
                 } else {
@@ -26,12 +28,56 @@ module.exports = {
             }
         });
 
+        app.post('/send/otp', async (req, res) => {
+            try {
+                const { mobile } = req.body;
+                // await userData.sendOTP(mobile);
+                res.status(200).send('OTP sent successfully');
+            } catch (error) {
+                res.status(500).send(error);
+            }
+        });
+
+        app.post('/verify/otp', async (req, res) => {
+            try {
+                const { mobile, otp } = req.body;
+                const result = await userData.verifyOTP(mobile, otp);
+                res.status(200).send(result);
+            } catch (error) {
+                console.log("Error: ", error);
+                res.status(500).send(error);
+            }
+        });
+
+
         app.post('/deregister/user', async (req, res) => {
             try {
                 const { email } = req.body;
                 const result = await userData.deRegisterUser(email);
                 res.status(200).send(result);
             } catch (error) {
+                res.status(500).send(error);
+            }
+        });
+
+        app.post('/get/user', async (req, res) => {
+            try {
+                const { mobile } = req.body;
+                const result = await userData.getUserByEmailOrMob(mobile);
+                res.status(200).send(result);
+            } catch (error) {
+                console.log("Error: ", error);
+                res.status(500).send(error);
+            }
+        });
+
+        app.post('/register/seller', async (req, res) => {
+            try {
+                const seller = req.body;
+                const result = await userData.registerSeller(seller);
+                res.status(201).send(result);
+            } catch (error) {
+                console.log("Error: ", error);
                 res.status(500).send(error);
             }
         });
