@@ -75,10 +75,10 @@ const getOtp = async (mobileNumber) => {
 
 const userData = {
     registerUser: async (user) => {
-        const { name, email, preferences, mobile } = user;
+        const { name, email, mobile, receiveWhatsapp, receiveSMS, receiveEmail } = user;
         const query = {
             text: 'INSERT INTO users(name, email, phone_number, receivesms, receivewhatsapp, receiveemail) VALUES($1, $2, $3, $4, $5, $6) RETURNING *',
-            values: [name, email, mobile, preferences.sms, preferences.whatsapp, preferences.email]
+            values: [name, email, mobile, receiveSMS, receiveWhatsapp, receiveEmail]
         };
         const result = await client.query(query.text, query.values);
         return result.rows[0];
@@ -112,7 +112,7 @@ const userData = {
     verifyOTP: async (mobile, otp) => {
         // let sentOtp = await getOtp(mobile);
         let sentOtp = {
-            otp: '123456'
+            otp: '1234'
         };
         if (!sentOtp) {
             return {

@@ -2,11 +2,11 @@ const { userData } = require('../data/db_client');
 
 module.exports = {
     register_routes: (app) => {
-        app.post('/register/user', async (req, res) => {
+        app.post('/user/onboarding', async (req, res) => {
             try {
                 const user = req.body;
                 const result = await userData.registerUser(user);
-                res.status(201).send(result);
+                res.status(200).send(result);
             } catch (error) {
                 console.log("Error: ", error);
                 res.status(500).send(error);
