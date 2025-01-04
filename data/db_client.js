@@ -154,7 +154,7 @@ const userData = {
         const { mobile, name, address, rating, reviews, gstnumber, gstnumber_url, pancard, pancard_url, fssai_license_number, fssai_cert_url, msme_license_number, msme_cert_url, dealer_cert_url, distributor_cert_url } = seller;
         const updatedUserQuery = {
             text: 'UPDATE users SET user_type = $2, seller_submission_status = $3 WHERE phone_number = $1 RETURNING *',
-            values: [mobile, 'seller', 'submitted']
+            values: [mobile, 'seller', 'pending']
         }
         await client.query(updatedUserQuery);
         const storeDetails = {
@@ -174,7 +174,7 @@ const userData = {
     getSubmittedSellers: async () => {
         const query = {
             text: 'SELECT * FROM users WHERE seller_submission_status = $1',
-            values: ['submitted']
+            values: ['pending']
         };
         const result = await client.query(query.text, query.values);
         return result.rows;
