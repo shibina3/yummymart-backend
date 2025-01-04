@@ -77,8 +77,8 @@ const userData = {
     registerUser: async (user) => {
         const { name, email, mobile, receiveWhatsapp, receiveSMS, receiveEmail } = user;
         const query = {
-            text: 'INSERT INTO users(name, email, phone_number, receivesms, receivewhatsapp, receiveemail) VALUES($1, $2, $3, $4, $5, $6) RETURNING *',
-            values: [name, email, mobile, receiveSMS, receiveWhatsapp, receiveEmail]
+            text: 'INSERT INTO users(name, email, phone_number, receivesms, receivewhatsapp, receiveemail, user_type) VALUES($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+            values: [name, email, mobile, receiveSMS, receiveWhatsapp, receiveEmail, 'buyer']
         };
         const result = await client.query(query.text, query.values);
         return result.rows[0];
@@ -151,15 +151,38 @@ const userData = {
         return result.rows[0];
     },
     registerSeller: async (seller) => {
-        const { mobile, storeName, storeAddress, storeRating, storeReviews, gstNumber, panNumber, panFile, gstFile } = seller;
+        const { mobile, name, address, rating, reviews, gstnumber, gstnumber_url, pancard, pancard_url, fssai_license_number, fssai_cert_url, msme_license_number, msme_cert_url, dealer_cert_url, distributor_cert_url } = seller;
         const updatedUserQuery = {
-            text: 'UPDATE users SET seller = true WHERE phone_number = $1 RETURNING *',
-            values: [mobile]
+            text: 'UPDATE users SET user_type = $2, seller_submission_status = $3 WHERE phone_number = $1 RETURNING *',
+            values: [mobile, 'seller', 'submitted']
         }
         await client.query(updatedUserQuery);
+        const storeDetails = {
+            mobile, name, address, rating, reviews, gstnumber, gstnumber_url, pancard, pancard_url, fssai_license_number, fssai_cert_url, msme_license_number, msme_cert_url, dealer_cert_url, distributor_cert_url
+        }
+        await storesData.createStore(storeDetails);
+        return {success: true};
+    },
+    getUserType: async (mobile) => {
         const query = {
-            text: 'INSERT INTO stores(phone_number, name, address, reviews, rating, pancard, pancard_url, gstnumber, gstnumber_url) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
-            values: [mobile, storeName, storeAddress, storeReviews, storeRating, panNumber, JSON.stringify(panFile), gstNumber, JSON.stringify(gstFile)]
+            text: 'SELECT user_type, seller_submission_status FROM users WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const result = await client.query(query.text, query.values);
+        return result.rows[0];
+    },
+    getSubmittedSellers: async () => {
+        const query = {
+            text: 'SELECT * FROM users WHERE seller_submission_status = $1',
+            values: ['submitted']
+        };
+        const result = await client.query(query.text, query.values);
+        return result.rows;
+    },
+    getSellerSubmittedDetails: async (mobile) => {
+        const query = {
+            text: 'SELECT * FROM users WHERE phone_number = $1',
+            values: [mobile]
         };
         const result = await client.query(query.text, query.values);
         return result.rows[0];
@@ -285,17 +308,18 @@ const productsData = {
 
 const storesData = {
     createStore: async (store) => {
-        const { name, address, image_url, rating, reviews, pancard } = store;
-        const query = {
-            text: 'INSERT INTO stores(name, address, image_url, rating, reviews, pancard) VALUES($1, $2, $3, $4, $5, $6) RETURNING *',
-            values: [name, address, image_url, rating, reviews, pancard]
-        };
-        await client.query(query);
-        const selectQuery = {
-            text: 'SELECT * FROM stores'
-        };
-        const result = await client.query(selectQuery);
-        return result.rows;
+        try {
+            const { mobile, name, address, reviews, rating, pancard, pancard_url, gstnumber, gstnumber_url, fssai_license_number, fssai_cert_url, msme_license_number, msme_cert_url, dealer_cert_url, distributor_cert_url } = store;
+            const query = {
+                text: 'INSERT INTO stores(phone_number, name, address, reviews, rating, pancard, pancard_url, gstnumber, gstnumber_url, fssai_license_number, fssai_cert_url, msme_license_number, msme_cert_url, dealer_cert_url, distributor_cert_url) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *',
+                values: [mobile, name, address, reviews, rating, pancard, pancard_url, gstnumber, gstnumber_url, fssai_license_number, fssai_cert_url, msme_license_number, msme_cert_url, dealer_cert_url, distributor_cert_url]
+            };
+            await client.query(query);
+            return true;
+        } catch (error) {
+            console.error("Error creating store: ", error);
+            return false;
+        }
     },
     getStores: async () => {
         const query = {

@@ -75,7 +75,39 @@ module.exports = {
             try {
                 const seller = req.body;
                 const result = await userData.registerSeller(seller);
-                res.status(201).send(result);
+                res.status(200).send(result);
+            } catch (error) {
+                console.log("Error: ", error);
+                res.status(500).send(error);
+            }
+        });
+
+        app.post('/get/user-type', async (req, res) => {
+            try {
+                const { mobile } = req.body;
+                const result = await userData.getUserType(mobile);
+                res.status(200).send(result);
+            } catch (error) {
+                console.log("Error: ", error);
+                res.status(500).send(error);
+            }
+        });
+
+        app.post('/get/submitted-sellers', async (req, res) => {
+            try {
+                const result = await userData.getSubmittedSellers();
+                res.status(200).send(result);
+            } catch (error) {
+                console.log("Error: ", error);
+                res.status(500).send(error);
+            }
+        });
+
+        app.post('/get/seller-submitted-details', async (req, res) => {
+            try {
+                const { mobile } = req.body;
+                const result = await userData.getSellerSubmittedDetails(mobile);
+                res.status(200).send(result);
             } catch (error) {
                 console.log("Error: ", error);
                 res.status(500).send(error);
