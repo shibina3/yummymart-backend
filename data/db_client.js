@@ -151,7 +151,7 @@ const userData = {
         return result.rows[0];
     },
     registerSeller: async (seller) => {
-        const { mobile, name, address, rating, reviews, gstnumber, gstnumber_url, pancard, pancard_url, fssai_license_number, fssai_cert_url, msme_license_number, msme_cert_url, dealer_cert_url, distributor_cert_url } = seller;
+        const { mobile, name, address, rating, reviews, gstnumber, gstnumber_url, pancard, pancard_url, fssai_license_number, fssai_cert_url, msme_license_number, msme_cert_url, dealer_cert_url, distributor_cert_url, resubmit } = seller;
         const updatedUserQuery = {
             text: 'UPDATE users SET user_type = $2, seller_submission_status = $3 WHERE phone_number = $1 RETURNING *',
             values: [mobile, 'seller', 'pending']
@@ -160,7 +160,11 @@ const userData = {
         const storeDetails = {
             mobile, name, address, rating, reviews, gstnumber, gstnumber_url, pancard, pancard_url, fssai_license_number, fssai_cert_url, msme_license_number, msme_cert_url, dealer_cert_url, distributor_cert_url
         }
-        await storesData.createStore(storeDetails);
+        if(resubmit) {
+            await storesData.updateStore(storeDetails);
+        } else {
+            await storesData.createStore(storeDetails);
+        }
         return {success: true};
     },
     getUserType: async (mobile) => {
@@ -169,6 +173,15 @@ const userData = {
             values: [mobile]
         };
         const result = await client.query(query.text, query.values);
+
+        if(result.rows[0].seller_submission_status === 'rejected') {
+            let getCommentQuery = {
+                text: 'SELECT comments FROM stores WHERE phone_number = $1',
+                values: [mobile]
+            }
+            let comments = await client.query(getCommentQuery.text, getCommentQuery.values);
+            result.rows[0].comments = comments.rows[0].comments;
+        }
         return result.rows[0];
     },
     getSubmittedSellers: async () => {
@@ -177,11 +190,15 @@ const userData = {
             values: ['pending']
         };
         const result = await client.query(query.text, query.values);
+        for(let i = 0; i < result.rows.length; i++) {
+            const storeResult = await storesData.getStore(result.rows[i].phone_number);
+            result.rows[i].store = storeResult
+        }
         return result.rows;
     },
     getSellerSubmittedDetails: async (mobile) => {
         const query = {
-            text: 'SELECT * FROM users WHERE phone_number = $1',
+            text: 'SELECT * FROM stores WHERE phone_number = $1',
             values: [mobile]
         };
         const result = await client.query(query.text, query.values);
@@ -321,6 +338,14 @@ const storesData = {
             return false;
         }
     },
+    getStore: async (mobile) => {
+        const query = {
+            text: 'SELECT * FROM stores WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const result = await client.query(query.text, query.values);
+        return result.rows[0];
+    },
     getStores: async () => {
         const query = {
             text: 'SELECT * FROM stores'
@@ -329,18 +354,13 @@ const storesData = {
         return result.rows;
     },
     updateStore: async (store) => {
-        const { id, name, address, image_url, rating, reviews, pancard } = store;
+        const { mobile, name, address, reviews, rating, pancard, pancard_url, gstnumber, gstnumber_url, fssai_license_number, fssai_cert_url, msme_license_number, msme_cert_url, dealer_cert_url, distributor_cert_url } = store;
         const query = {
-            text: 'UPDATE stores SET name = $1, address = $2, image_url = $3, rating = $4, reviews = $5, pancard = $6 WHERE id = $7 RETURNING *',
-            values: [name, address, image_url, rating, reviews, pancard, id]
+            text: 'UPDATE stores SET name = $2, address = $3, reviews = $4, rating = $5, pancard = $6, pancard_url = $7, gstnumber = $8, gstnumber_url = $9, fssai_license_number = $10, fssai_cert_url = $11, msme_license_number = $12, msme_cert_url = $13, dealer_cert_url = $14, distributor_cert_url = $15 WHERE phone_number = $1 RETURNING *',
+            values: [mobile, name, address, reviews, rating, pancard, pancard_url, gstnumber, gstnumber_url, fssai_license_number, fssai_cert_url, msme_license_number, msme_cert_url, dealer_cert_url, distributor_cert_url]
         };
         await client.query(query);
-
-        const selectQuery = {
-            text: 'SELECT * FROM stores'
-        };
-        const result = await client.query(selectQuery);
-        return result.rows;
+        return true;
     },
     deleteStore: async (id) => {
         const query = {
