@@ -40,5 +40,25 @@ module.exports = {
                 res.status(500).send(error);
             }
         });
+
+        app.post('/accept/seller', async (req, res) => {
+            try {
+                const { mobile } = req.body;
+                const result = await storesData.acceptSeller(mobile);
+                res.status(200).send(result);
+            } catch (error) {
+                res.status(500).send(error);
+            }
+        });
+
+        app.post('/reject/seller', async (req, res) => {
+            try {
+                const { mobile, comments } = req.body;
+                const result = await storesData.rejectSeller(mobile, comments);
+                res.status(200).send(result);
+            } catch (error) {
+                res.status(500).send(error);
+            }
+        });
     }
 }

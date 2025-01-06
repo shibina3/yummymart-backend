@@ -134,10 +134,12 @@ const userData = {
                 isNewUser: true,
             }
         } else {
+            let userType = getUser.user_type;
             return {
                 message: "OTP verified successfully",
                 isVerified: true,
                 isNewUser: false,
+                userType: userType
             }
         }
         
@@ -162,6 +164,7 @@ const userData = {
         }
         if(resubmit) {
             await storesData.updateStore(storeDetails);
+            await storesData.resetStatus(mobile);
         } else {
             await storesData.createStore(storeDetails);
         }
@@ -272,7 +275,7 @@ const productsData = {
         const result = await client.query(selectQuery);
         return result.rows;
     },
-    getProducts: async (category) => {
+    getAllProducts: async (category) => {
         let query;
         if(category === 'all') {
             query = {
@@ -293,6 +296,28 @@ const productsData = {
         }
         const result = await client.query(query);
         return result.rows;
+    },
+    getVerifiedProducts: async (category) => {
+        if(category === 'all') {
+            const query = {
+                text: 'SELECT * FROM products WHERE is_admin_verified = $1',
+                values: [true]
+            };
+            const result = await client.query(query);
+            return result.rows;
+        } else {
+            const getCategoryIdQuery = {
+                text: 'SELECT id FROM categories WHERE name = $1',
+                values: [category]
+            }
+            const categoryId = await client.query(getCategoryIdQuery);
+            const query = {
+                text: 'SELECT * FROM products WHERE category_id = $1 AND is_admin_verified = $2',
+                values: [categoryId, true]
+            };
+            const result = await client.query(query);
+            return result.rows;
+        }
     },
     updateProduct: async (product) => {
         const { id, name, description, image_url, category_id, stock, store_id, mrp, yummy_price } = product;
@@ -362,6 +387,14 @@ const storesData = {
         await client.query(query);
         return true;
     },
+    resetStatus: async (mobile) => {
+        const query = {
+            text: 'UPDATE users SET seller_submission_status = $2 WHERE phone_number = $1 RETURNING *',
+            values: [mobile, 'pending']
+        };
+        await client.query(query);
+        return true;
+    },
     deleteStore: async (id) => {
         const query = {
             text: 'DELETE FROM stores WHERE id = $1',
@@ -374,6 +407,28 @@ const storesData = {
         };
         const result = await client.query(selectQuery);
         return result.rows;
+    },
+    acceptSeller: async (mobile) => {
+        const query = {
+            text: 'UPDATE users SET seller_submission_status = $2 WHERE phone_number = $1 RETURNING *',
+            values: [mobile, 'verified']
+        };
+        await client.query(query);
+        return true;
+    },
+    rejectSeller: async (mobile, comments) => {
+        const query = {
+            text: 'UPDATE users SET seller_submission_status = $2 WHERE phone_number = $1 RETURNING *',
+            values: [mobile, 'rejected']
+        };
+        await client.query(query);
+
+        const storeQuery = {
+            text: 'UPDATE stores SET comments = $2 WHERE phone_number = $1 RETURNING *',
+            values: [mobile, comments]
+        };
+        await client.query(storeQuery);
+        return true;
     }
 }
 

@@ -15,7 +15,7 @@ module.exports = {
         app.post('/get/products', async (req, res) => {
             try {
                 const { category } = req.body;
-                const result = await productsData.getProducts(category);
+                const result = await productsData.getAllProducts(category);
                 res.status(200).send(result);
             } catch (error) {
                 console.log("Error: ", error);
