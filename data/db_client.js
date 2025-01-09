@@ -262,22 +262,45 @@ const categoriesData = {
 
 const productsData = {
     createProduct: async (product) => {
-        const { name, description, category_id, image_url, stock, store_id, mrp, yummy_price } = product;
+        const { name, description, category_id, products_images, allow_get_quote, stock, store_id, mrp, yummy_price, max_quantity, min_quantity, min_b2b_quantity, thumbnail_image } = product;
         const query = {
-            text: 'INSERT INTO products(name, description, image_url, stock, store_id, mrp, yummy_price, category_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-            values: [name, description, image_url, price, category_id]
+            text: 'INSERT INTO products(name, description, category_id, products_images, allow_get_quote, stock, store_id, mrp, yummy_price, max_quantity, min_quantity, min_b2b_quantity, thumbnail_image, verification_status) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *',
+            values: [name, description, category_id, JSON.stringify(products_images), allow_get_quote, stock, store_id, mrp, yummy_price, max_quantity, min_quantity, min_b2b_quantity, thumbnail_image, 'pending']
         };
         await client.query(query);
 
-        const selectQuery = {
+        return true;
+    },
+    acceptProduct: async (id) => {
+        const query = {
+            text: 'UPDATE products SET is_admin_verified = $2, verification_status = $3 WHERE id = $1 RETURNING *',
+            values: [id, true, 'verified']
+        };
+        await client.query(query);
+
+        const allProductsQuery = {
             text: 'SELECT * FROM products'
         };
-        const result = await client.query(selectQuery);
+        const result = await client.query(allProductsQuery);
+
+        return result.rows;
+    },
+    rejectProduct: async (id, comments) => {
+        const query = {
+            text: 'UPDATE products SET is_admin_verified = $2, admin_comments = $3, verification_status = $4 WHERE id = $1 RETURNING *',
+            values: [id, false, comments, 'rejected']
+        };
+        await client.query(query);
+
+        const allProductsQuery = {
+            text: 'SELECT * FROM products'
+        };
+        const result = await client.query(allProductsQuery);
         return result.rows;
     },
     getAllProducts: async (category) => {
         let query;
-        if(category === 'all') {
+        if(category === 'all' || !category) {
             query = {
                 text: 'SELECT * FROM products'
             };
@@ -296,6 +319,14 @@ const productsData = {
         }
         const result = await client.query(query);
         return result.rows;
+    },
+    getProduct: async (id) => {
+        const query = {
+            text: 'SELECT * FROM products WHERE id = $1',
+            values: [id]
+        };
+        const result = await client.query(query);
+        return result.rows[0];
     },
     getVerifiedProducts: async (category) => {
         if(category === 'all') {
@@ -320,18 +351,14 @@ const productsData = {
         }
     },
     updateProduct: async (product) => {
-        const { id, name, description, image_url, category_id, stock, store_id, mrp, yummy_price } = product;
+        const { id, name, description, products_images, allow_get_quote, stock, store_id, mrp, yummy_price, category_id, max_quantity, min_quantity, min_b2b_quantity, thumbnail_image } = product;
         const query = {
-            text: 'UPDATE products SET name = $1, description = $2, image_url = $3, mrp = $4, yummy_price = $5, category_id = $6, stock = $7, store_id = $8 WHERE id = $9 RETURNING *',
-            values: [name, description, image_url, mrp, yummy_price, category_id, stock, store_id, id]
+            text: 'UPDATE products SET name = $1, description = $2, products_images = $3, allow_get_quote = $4, stock = $5, store_id = $6, mrp = $7, yummy_price = $8, category_id = $9, max_quantity = $10, min_quantity = $11, min_b2b_quantity = $12, thumbnail_image = $13, verification_status = $15 WHERE id = $14 RETURNING *',
+            values: [name, description, JSON.stringify(products_images), allow_get_quote, stock, store_id, mrp, yummy_price, category_id, max_quantity, min_quantity, min_b2b_quantity, thumbnail_image, id, 'pending']
         };
         await client.query(query);
 
-        const selectQuery = {
-            text: 'SELECT * FROM products'
-        };
-        const result = await client.query(selectQuery);
-        return result.rows;
+        return true;
     },
     deleteProduct: async (id) => {
         const query = {
@@ -339,12 +366,7 @@ const productsData = {
             values: [id]
         };
         await client.query(query);
-
-        const selectQuery = {
-            text: 'SELECT * FROM products'
-        };
-        const result = await client.query(selectQuery);
-        return result.rows;
+        return true;
     }
 }
 

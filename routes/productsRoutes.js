@@ -6,7 +6,35 @@ module.exports = {
             try {
                 const product = req.body;
                 const result = await productsData.createProduct(product);
-                res.status(201).send(result);
+                if(result) {
+                    res.status(201).send({
+                        success: true,
+                    });
+                } else {
+                    res.status(200).send({
+                        success: false,
+                    });
+                }
+            } catch (error) {
+                res.status(500).send(error);
+            }
+        });
+
+        app.post('/accept/product', async (req, res) => {
+            try {
+                const { id } = req.body;
+                const result = await productsData.acceptProduct(id);
+                res.status(200).send(result);
+            } catch (error) {
+                res.status(500).send(error);
+            }
+        });
+
+        app.post('/reject/product', async (req, res) => {
+            try {
+                const { id, comments } = req.body;
+                const result = await productsData.rejectProduct(id, comments);
+                res.status(200).send(result);
             } catch (error) {
                 res.status(500).send(error);
             }
@@ -27,6 +55,24 @@ module.exports = {
             try {
                 const product = req.body;
                 const result = await productsData.updateProduct(product);
+                if(result) {
+                    res.status(201).send({
+                        success: true,
+                    });
+                } else {
+                    res.status(200).send({
+                        success: false,
+                    });
+                }
+            } catch (error) {
+                res.status(500).send(error);
+            }
+        });
+
+        app.post('/get/product', async (req, res) => {
+            try {
+                const { id } = req.body;
+                const result = await productsData.getProduct(id);
                 res.status(200).send(result);
             } catch (error) {
                 res.status(500).send(error);
@@ -37,7 +83,15 @@ module.exports = {
             try {
                 const { id } = req.body;
                 const result = await productsData.deleteProduct(id);
-                res.status(200).send(result);
+                if(result) {
+                    res.status(201).send({
+                        success: true,
+                    });
+                } else {
+                    res.status(200).send({
+                        success: false,
+                    });
+                }
             } catch (error) {
                 res.status(500).send(error);
             }
