@@ -96,5 +96,15 @@ module.exports = {
                 res.status(500).send(error);
             }
         });
+
+        app.post('/get/products/for/seller', async (req, res) => {
+            try {
+                const { mobile } = req.body;
+                const result = await productsData.getProductsForSeller(mobile);
+                res.status(200).send(result);
+            } catch (error) {
+                res.status(500).send(error);
+            }
+        });
     }
 }

@@ -271,6 +271,21 @@ const productsData = {
 
         return true;
     },
+    getProductsForSeller: async (mobile) => {
+        const query = {
+            text: 'SELECT id FROM stores WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const store = await client.query(query);
+        const store_id = store.rows[0].id;
+
+        const productsQuery = {
+            text: 'SELECT * FROM products WHERE store_id = $1',
+            values: [store_id]
+        };
+        const result = await client.query(productsQuery);
+        return result.rows;
+    },
     acceptProduct: async (id) => {
         const query = {
             text: 'UPDATE products SET is_admin_verified = $2, verification_status = $3 WHERE id = $1 RETURNING *',
