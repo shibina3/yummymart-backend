@@ -475,7 +475,16 @@ const storesData = {
 }
 
 const wishlistData = {
-    addToWishlist: async (user_id, product_id) => {
+    addToWishlist: async (mobile, product_id) => {
+        const userQuery = {
+            text: 'SELECT id FROM users WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const user = await client.query(userQuery.text, userQuery.values);
+        if(user.rows.length === 0) {
+            return [];
+        }
+        const user_id = user.rows[0].id;
         const query = {
             text: 'INSERT INTO wishlist(user_id, product_id) VALUES($1, $2) RETURNING *',
             values: [user_id, product_id]
@@ -489,7 +498,16 @@ const wishlistData = {
         const result = await client.query(selectQuery);
         return result.rows;
     },
-    getWishlist: async (user_id) => {
+    getWishlist: async (mobile) => {
+        const userQuery = {
+            text: 'SELECT id FROM users WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const user = await client.query(userQuery.text, userQuery.values);
+        if(user.rows.length === 0) {
+            return [];
+        }
+        const user_id = user.rows[0].id;
         const query = {
             text: 'SELECT * FROM wishlist WHERE user_id = $1',
             values: [user_id]
@@ -497,7 +515,16 @@ const wishlistData = {
         const result = await client.query(query);
         return result.rows;
     },
-    removeFromWishlist: async (user_id, product_id) => {
+    removeFromWishlist: async (mobile, product_id) => {
+        const userQuery = {
+            text: 'SELECT id FROM users WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const user = await client.query(userQuery.text, userQuery.values);
+        if(user.rows.length === 0) {
+            return [];
+        }
+        const user_id = user.rows[0].id;
         const query = {
             text: 'DELETE FROM wishlist WHERE user_id = $1 AND product_id = $2',
             values: [user_id, product_id]
@@ -514,7 +541,16 @@ const wishlistData = {
 }
 
 const cartData = {
-    addToCart: async (user_id, product_id, quantity) => {
+    addToCart: async (mobile, product_id, quantity) => {
+        const userQuery = {
+            text: 'SELECT id FROM users WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const user = await client.query(userQuery.text, userQuery.values);
+        if(user.rows.length === 0) {
+            return [];
+        }
+        const user_id = user.rows[0].id;
         const insertQuery = {
             text: 'INSERT INTO cart(user_id, product_id, quantity) VALUES($1, $2, $3) RETURNING *',
             values: [user_id, product_id, quantity]
@@ -528,7 +564,17 @@ const cartData = {
         const result = await client.query(selectQuery);
         return result.rows;
     },
-    getCart: async (user_id) => {
+    getCart: async (mobile) => {
+
+        const userQuery = {
+            text: 'SELECT id FROM users WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const user = await client.query(userQuery.text, userQuery.values);
+        if(user.rows.length === 0) {
+            return [];
+        }
+        const user_id = user.rows[0].id;
         const query = {
             text: 'SELECT * FROM cart WHERE user_id = $1',
             values: [user_id]
@@ -536,7 +582,16 @@ const cartData = {
         const result = await client.query(query);
         return result.rows;
     },
-    removeFromCart: async (user_id, product_id) => {
+    removeFromCart: async (mobile, product_id) => {
+        const userQuery = {
+            text: 'SELECT id FROM users WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const user = await client.query(userQuery.text, userQuery.values);
+        if(user.rows.length === 0) {
+            return [];
+        }
+        const user_id = user.rows[0].id;
         const removeQuery = {
             text: 'DELETE FROM cart WHERE user_id = $1 AND product_id = $2',
             values: [user_id, product_id]
@@ -550,7 +605,16 @@ const cartData = {
         const result = await client.query(selectQuery);
         return result.rows;
     },
-    updateCart: async (user_id, product_id, quantity) => {
+    updateCart: async (mobile, product_id, quantity) => {
+        const userQuery = {
+            text: 'SELECT id FROM users WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const user = await client.query(userQuery.text, userQuery.values);
+        if(user.rows.length === 0) {
+            return [];
+        }
+        const user_id = user.rows[0].id;
         const query = {
             text: 'UPDATE cart SET quantity = $3 WHERE user_id = $1 AND product_id = $2 RETURNING *',
             values: [user_id, product_id, quantity]
@@ -568,7 +632,16 @@ const cartData = {
 
 const orderData = {
     createOrder: async (order) => {
-        const { user_id, store_id, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery } = order;
+        const { mobile, store_id, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery } = order;
+        const userQuery = {
+            text: 'SELECT id FROM users WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const user = await client.query(userQuery.text, userQuery.values);
+        if(user.rows.length === 0) {
+            return [];
+        }
+        const user_id = user.rows[0].id;
         const query = {
             text: 'INSERT INTO orders(user_id, store_id, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *',
             values: [user_id, store_id, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery]
@@ -582,7 +655,16 @@ const orderData = {
         const result = await client.query(selectQuery);
         return result.rows;
     },
-    getOrders: async (user_id) => {
+    getOrders: async (mobile) => {
+        const userQuery = {
+            text: 'SELECT id FROM users WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const user = await client.query(userQuery.text, userQuery.values);
+        if(user.rows.length === 0) {
+            return [];
+        }
+        const user_id = user.rows[0].id;
         const query = {
             text: 'SELECT * FROM orders WHERE user_id = $1',
             values: [user_id]
@@ -591,7 +673,16 @@ const orderData = {
         return result.rows;
     },
     updateOrder: async (order) => {
-        const { order_id, user_id, store_id, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery } = order;
+        const { order_id, mobile, store_id, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery } = order;
+        const userQuery = {
+            text: 'SELECT id FROM users WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const user = await client.query(userQuery.text, userQuery.values);
+        if(user.rows.length === 0) {
+            return [];
+        }
+        const user_id = user.rows[0].id;
         const query = {
             text: 'UPDATE orders SET user_id = $2, store_id = $3, delivery_address_id = $4, payment_method = $5, total = $6, order_status = $7, payment_status = $8, transaction_id = $9, created_at = $10, expected_delivery = $11 WHERE id = $1 RETURNING *',
             values: [order_id, user_id, store_id, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery]
@@ -677,7 +768,16 @@ const orderItemsData = {
 
 const deliveryAddressData = {
     createDeliveryAddress: async (delivery_address) => {
-        const { user_id, type, address_line_1, address_line_2, city, state, pincode, phone_number } = delivery_address;
+        const { mobile, type, address_line_1, address_line_2, city, state, pincode, phone_number } = delivery_address;
+        const userQuery = {
+            text: 'SELECT id FROM users WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const user = await client.query(userQuery.text, userQuery.values);
+        if(user.rows.length === 0) {
+            return [];
+        }
+        const user_id = user.rows[0].id;
         const query = {
             text: 'INSERT INTO delivery_addresses(user_id, type, address_line_1, address_line_2, city, state, pincode, phone_number) VALUES($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
             values: [user_id, type, address_line_1, address_line_2, city, state, pincode, phone_number]
@@ -691,7 +791,16 @@ const deliveryAddressData = {
         const result = await client.query(selectQuery);
         return result.rows;
     },
-    getDeliveryAddresses: async (user_id) => {
+    getDeliveryAddresses: async (mobile) => {
+        const userQuery = {
+            text: 'SELECT id FROM users WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const user = await client.query(userQuery.text, userQuery.values);
+        if(user.rows.length === 0) {
+            return [];
+        }
+        const user_id = user.rows[0].id;
         const query = {
             text: 'SELECT * FROM delivery_addresses WHERE user_id = $1',
             values: [user_id]
@@ -700,7 +809,16 @@ const deliveryAddressData = {
         return result.rows;
     },
     updateDeliveryAddress: async (delivery_address) => {
-        const { id, user_id, type, address_line_1, address_line_2, city, state, pincode, phone_number } = delivery_address;
+        const { id, mobile, type, address_line_1, address_line_2, city, state, pincode, phone_number } = delivery_address;
+        const userQuery = {
+            text: 'SELECT id FROM users WHERE phone_number = $1',
+            values: [mobile]
+        };
+        const user = await client.query(userQuery.text, userQuery.values);
+        if(user.rows.length === 0) {
+            return [];
+        }
+        const user_id = user.rows[0].id;
         const query = {
             text: 'UPDATE delivery_addresses SET user_id = $2, type = $3, address_line_1 = $4, address_line_2 = $5, city = $6, state = $7, pincode = $8, phone_number = $9 WHERE id = $1 RETURNING *',
             values: [id, user_id, type, address_line_1, address_line_2, city, state, pincode, phone_number]

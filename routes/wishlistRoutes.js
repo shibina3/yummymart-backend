@@ -4,8 +4,8 @@ module.exports = {
     register_routes: (app) => {
         app.post('/create/wishlist', async (req, res) => {
             try {
-                const { user_id, product_id } = req.body;
-                const result = await wishlistData.addToWishlist(user_id, product_id);
+                const { mobile, product_id } = req.body;
+                const result = await wishlistData.addToWishlist(mobile, product_id);
                 res.status(201).send(result);
             } catch (error) {
                 res.status(500).send(error);
@@ -14,8 +14,8 @@ module.exports = {
 
         app.post('/get/wishlists', async (req, res) => {
             try {
-                const { user_id } = req.body;
-                const result = await wishlistData.getWishlist(user_id);
+                const { mobile } = req.body;
+                const result = await wishlistData.getWishlist(mobile);
                 res.status(200).send(result);
             } catch (error) {
                 res.status(500).send(error);
@@ -24,8 +24,8 @@ module.exports = {
 
         app.delete('/delete/wishlist', async (req, res) => {
             try {
-                const { user_id, product_id } = req.body;
-                const result = await wishlistData.removeFromWishlist(user_id, product_id);
+                const { mobile, product_id } = req.body;
+                const result = await wishlistData.removeFromWishlist(mobile, product_id);
                 res.status(200).send(result);
             } catch (error) {
                 res.status(500).send(error);
