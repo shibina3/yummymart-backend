@@ -277,6 +277,10 @@ const productsData = {
             values: [mobile]
         };
         const store = await client.query(query);
+
+        if(store.rows.length === 0) {
+            return [];
+        }
         const store_id = store.rows[0].id;
 
         const productsQuery = {
@@ -325,11 +329,12 @@ const productsData = {
                 values: [category]
             }
             const categoryId = await client.query(getCategoryIdQuery);
-            console.log("Category ID: ", categoryId[0]);
-            
+            if(categoryId.rows.length === 0) {
+                return [];
+            }            
             query = {
                 text: 'SELECT * FROM products WHERE category_id = $1',
-                values: [categoryId]
+                values: [categoryId.rows[0].id]
             };
         }
         const result = await client.query(query);
