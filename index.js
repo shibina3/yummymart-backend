@@ -206,6 +206,18 @@ const userData = {
         };
         const result = await pool.query(query.text, query.values);
         return result.rows[0];
+    }, 
+    getVerifiedSellers: async () => {
+        const query = {
+            text: 'SELECT * FROM users WHERE seller_submission_status = $1',
+            values: ['verified']
+        };
+        const result = await pool.query(query.text, query.values);
+        for(let i = 0; i < result.rows.length; i++) {
+            const storeResult = await storesData.getStore(result.rows[i].phone_number);
+            result.rows[i].store = storeResult
+        }
+        return result.rows;
     }
 }
 
@@ -264,7 +276,7 @@ const productsData = {
     createProduct: async (product) => {
         const { name, description, category_id, products_images, allow_get_quote, stock, store_id, mrp, yummy_price, max_quantity, min_quantity, min_b2b_quantity, thumbnail_image } = product;
         const query = {
-            text: 'INSERT INTO products(name, description, category_id, products_images, allow_get_quote, stock, store_id, mrp, yummy_price, max_quantity, min_quantity, min_b2b_quantity, thumbnail_image, verification_status) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *',
+            text: 'INSERT INTO products(name, description, category_id, product_images, allow_get_quote, stock, store_id, mrp, yummy_price, max_quantity, min_quantity, min_b2b_quantity, thumbnail_image, verification_status) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *',
             values: [name, description, category_id, JSON.stringify(products_images), allow_get_quote, stock, store_id, mrp, yummy_price, max_quantity, min_quantity, min_b2b_quantity, thumbnail_image, 'pending']
         };
         await pool.query(query);
@@ -355,25 +367,97 @@ const productsData = {
                 values: [true]
             };
             const result = await pool.query(query);
+            for(let i = 0; i < result.rows.length; i++) {
+                const categoryQuery = {
+                    text: 'SELECT * FROM categories WHERE id = $1',
+                    values: [result.rows[i].category_id]
+                };
+                const category = await pool.query(categoryQuery);
+                result.rows[i].category = category.rows[0];
+                const storeQuery = {
+                    text: 'SELECT * FROM stores WHERE id = $1',
+                    values: [result.rows[i].store_id]
+                };
+                const store = await pool.query(storeQuery);
+                result.rows[i].store = store.rows[0];
+            }
             return result.rows;
         } else {
             const getCategoryIdQuery = {
-                text: 'SELECT id FROM categories WHERE name = $1',
+                text: 'SELECT * FROM categories WHERE name = $1',
                 values: [category]
             }
-            const categoryId = await pool.query(getCategoryIdQuery);
+            const category = await pool.query(getCategoryIdQuery);
             const query = {
                 text: 'SELECT * FROM products WHERE category_id = $1 AND is_admin_verified = $2',
-                values: [categoryId, true]
+                values: [category.rows[0].id, true]
             };
             const result = await pool.query(query);
+            for(let i = 0; i < result.rows.length; i++) {
+                result.rows[i].category = category.rows[0];
+                const storeQuery = {
+                    text: 'SELECT * FROM stores WHERE id = $1',
+                    values: [result.rows[i].store_id]
+                };
+                const store = await pool.query(storeQuery);
+                result.rows[i].store = store.rows[0];
+            }
+
+            return result.rows;
+        }
+
+        
+    },
+    getUnverifiedProducts: async (category) => {
+        if(category === 'all') {
+            const query = {
+                text: 'SELECT * FROM products WHERE is_admin_verified = $1',
+                values: [false]
+            };
+            const result = await pool.query(query);
+            for(let i = 0; i < result.rows.length; i++) {
+                const categoryQuery = {
+                    text: 'SELECT * FROM categories WHERE id = $1',
+                    values: [result.rows[i].category_id]
+                };
+                const category = await pool.query(categoryQuery);
+                result.rows[i].category = category.rows[0];
+                const storeQuery = {
+                    text: 'SELECT * FROM stores WHERE id = $1',
+                    values: [result.rows[i].store_id]
+                };
+                const store = await pool.query(storeQuery);
+                result.rows[i].store = store.rows[0];
+            }
+            return result.rows;
+        } else {
+            const getCategoryIdQuery = {
+                text: 'SELECT * FROM categories WHERE name = $1',
+                values: [category]
+            }
+            const categoryRows = await pool.query(getCategoryIdQuery);
+            const query = {
+                text: 'SELECT * FROM products WHERE category_id = $1 AND is_admin_verified = $2',
+                values: [categoryRows.rows[0].id, false]
+            };
+            const result = await pool.query(query);
+            for(let i = 0; i < result.rows.length; i++) {
+                result.rows[i].category = categoryRows.rows[0];
+                const storeQuery = {
+                    text: 'SELECT * FROM stores WHERE id = $1',
+                    values: [result.rows[i].store_id]
+                };
+                const store = await pool.query(storeQuery);
+                result.rows[i].store = store.rows[0];
+            }
+
             return result.rows;
         }
     },
     updateProduct: async (product) => {
         const { id, name, description, products_images, allow_get_quote, stock, store_id, mrp, yummy_price, category_id, max_quantity, min_quantity, min_b2b_quantity, thumbnail_image } = product;
         const query = {
-            text: 'UPDATE products SET name = $1, description = $2, products_images = $3, allow_get_quote = $4, stock = $5, store_id = $6, mrp = $7, yummy_price = $8, category_id = $9, max_quantity = $10, min_quantity = $11, min_b2b_quantity = $12, thumbnail_image = $13, verification_status = $15 WHERE id = $14 RETURNING *',
+            text: 'UPDATE products SET name = $1, description = $2, product_images = $3, allow_get_quote = $4, stock = $5, store_id = $6, mrp = $7, yummy_price = $8, category_id = $9, max_quantity = $10, min_quantity = $11, min_b2b_quantity = $12, thumbnail_image = $13, verification_status = $15 WHERE id = $14 RETURNING *',
             values: [name, description, JSON.stringify(products_images), allow_get_quote, stock, store_id, mrp, yummy_price, category_id, max_quantity, min_quantity, min_b2b_quantity, thumbnail_image, id, 'pending']
         };
         await pool.query(query);
@@ -416,6 +500,22 @@ const storesData = {
     getStores: async () => {
         const query = {
             text: 'SELECT * FROM stores'
+        };
+        const result = await pool.query(query);
+        return result.rows;
+    },
+    getUnVerifiedStores: async () => {
+        const query = {
+            text: 'SELECT * FROM stores WHERE verification_status = $1',
+            values: ['pending']
+        };
+        const result = await pool.query(query);
+        return result.rows;
+    },
+    getVerifiedStores: async () => {
+        const query = {
+            text: 'SELECT * FROM stores WHERE verification_status = $1',
+            values: ['verified']
         };
         const result = await pool.query(query);
         return result.rows;
@@ -1328,6 +1428,52 @@ module.exports.handler = async (event, context) => {
             try {
                 const { mobile } = body;
                 const result = await productsData.getProductsForSeller(mobile);
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: result
+                }
+            } catch (error) {
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: error
+                }
+            }
+        } else if(path === '/get/unverified/products') {
+            const { category } = body;
+            const result = await productsData.getUnverifiedProducts(category);
+            return {
+                statusCode: 200,
+                headers,
+                body: result
+            }
+        } else if(path === '/get/verified/products') {
+            const { category } = body;
+            const result = await productsData.getVerifiedProducts(category);
+            return {
+                statusCode: 200,
+                headers,
+                body: result
+            }
+        } else if(path === '/get/verified/sellers') {
+            try {
+                const result = await userData.getVerifiedSellers();
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: result
+                }
+            } catch (error) {
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: error
+                }
+            }
+        } else if(path === '/get/unverified/sellers') {
+            try {
+                const result = await userData.getUnverifiedSellers();
                 return {
                     statusCode: 200,
                     headers,
