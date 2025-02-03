@@ -269,6 +269,42 @@ const categoriesData = {
         };
         const result = await pool.query(selectQuery);
         return result.rows;
+    },
+    getCategoriesDetails: async () => {
+        const query = {
+            text: 'SELECT * FROM categories'
+        };
+        const categories = await pool.query(query);
+    
+        for (let i = 0; i < categories.rows.length; i++) {
+            const productsQuery = {
+                text: 'SELECT * FROM products WHERE category_id = $1 and verification_status = $2',
+                values: [categories.rows[i].id, 'verified']
+            };
+            const products = await pool.query(productsQuery.text, productsQuery.values);
+            categories.rows[i].products = products.rows;
+            categories.rows[i].stores = [];
+    
+            // Use a Set to track unique store IDs
+            const uniqueStoreIds = new Set();
+    
+            for (let j = 0; j < categories.rows[i].products.length; j++) {
+                const storeId = categories.rows[i].products[j].store_id;
+    
+                // Check if the store ID is already processed
+                if (!uniqueStoreIds.has(storeId)) {
+                    uniqueStoreIds.add(storeId); // Mark this store ID as processed
+    
+                    const storeQuery = {
+                        text: 'SELECT * FROM stores WHERE id = $1',
+                        values: [storeId]
+                    };
+                    const store = await pool.query(storeQuery.text, storeQuery.values);
+                    categories.rows[i].stores.push(store.rows[0]); // Add the store to the array
+                }
+            }
+        }
+        return categories.rows;
     }
 } 
 
@@ -358,6 +394,33 @@ const productsData = {
             values: [id]
         };
         const result = await pool.query(query);
+        let wishlistQuery = {
+            text: 'SELECT * FROM wishlist WHERE product_id = $1',
+            values: [id]
+        }
+        let wishlist = await pool.query(wishlistQuery.text, wishlistQuery.values);
+        result.rows[0].wishlisted = wishlist.rows.length;
+
+        let reviewsQuery = {
+            text: 'SELECT * FROM reviews WHERE product_id = $1',
+            values: [id]
+        }
+        let reviews = await pool.query(reviewsQuery.text, reviewsQuery.values);
+        result.rows[0].reviews = reviews.rows;
+
+        let storeQuery = {
+            text: 'SELECT * FROM stores WHERE id = $1',
+            values: [result.rows[0].store_id]
+        }
+        let store = await pool.query(storeQuery.text, storeQuery.values);
+        result.rows[0].store = store.rows[0];
+
+        const similarProductsQuery = {
+            text: 'SELECT * FROM products WHERE category_id = $1 AND id != $2',
+            values: [result.rows[0].category_id, id]
+        };
+        const similarProducts = await pool.query(similarProductsQuery.text, similarProductsQuery.values);
+        result.rows[0].similarProducts = similarProducts.rows.slice(0, 6);
         return result.rows[0];
     },
     getVerifiedProducts: async (category) => {
@@ -471,6 +534,15 @@ const productsData = {
         };
         await pool.query(query);
         return true;
+    },
+    searchProducts: async (search) => {
+        let verifiedProducts = await this.getVerifiedProducts('all');
+
+        let filteredProducts = verifiedProducts.filter(product => {
+            return JSON.stringify(product).toLowerCase().includes(search.toLowerCase());
+        });
+
+        return filteredProducts;
     }
 }
 
@@ -680,6 +752,22 @@ const cartData = {
             values: [user_id]
         };
         const result = await pool.query(query);
+
+        for(let i = 0; i < result.rows.length; i++) {
+            const productQuery = {
+                text: 'SELECT * FROM products WHERE id = $1',
+                values: [result.rows[i].product_id]
+            };
+            const product = await pool.query(productQuery.text, productQuery.values);
+
+            const categoryQuery = {
+                text: 'SELECT * FROM categories WHERE id = $1',
+                values: [product.rows[0].category_id]
+            }
+            const category = await pool.query(categoryQuery.text, categoryQuery.values);
+            product.rows[0].category = category.rows[0];
+            result.rows[i].product = product.rows[0];
+        }
         return result.rows;
     },
     removeFromCart: async (mobile, product_id) => {
@@ -947,6 +1035,15 @@ const deliveryAddressData = {
     }
 }
 
+const homeData = {
+    getHome: async () => {
+        const categories = await categoriesData.getCategories();
+        const products = await productsData.getVerifiedProducts('all');
+        const stores = await storesData.getVerifiedStores();
+        return { categories, products, stores };
+    }
+}
+
 module.exports.handler = async (event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;
     const headers = {
@@ -972,6 +1069,22 @@ module.exports.handler = async (event, context) => {
             try {
                 const { mobile, product_id, quantity } = body;
                 const result = await cartData.addToCart(mobile, product_id, quantity);
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: result
+                }
+            } catch (error) {
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: error
+                }
+            }
+        } else if(path === '/search/products') {
+            try {
+                const { search } = body;
+                const result = await productsData.searchProducts(search);
                 return {
                     statusCode: 200,
                     headers,
@@ -1051,6 +1164,21 @@ module.exports.handler = async (event, context) => {
         } else if(path === '/get/categories') {
             try {
                 const result = await categoriesData.getCategories();
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: result
+                }
+            } catch (error) {
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: error
+                }
+            }
+        } else if(path === '/get/categories-details') {
+            try {
+                const result = await categoriesData.getCategoriesDetails();
                 return {
                     statusCode: 200,
                     headers,
@@ -1792,6 +1920,21 @@ module.exports.handler = async (event, context) => {
             try {
                 const { mobile, product_id } = body;
                 const result = await wishlistData.removeFromWishlist(mobile, product_id);
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: result
+                }
+            } catch (error) {
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: error
+                }
+            }
+        } else if(path === '/get/home') {
+            try {
+                const result = await homeData.getHome();
                 return {
                     statusCode: 200,
                     headers,
