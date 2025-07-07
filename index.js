@@ -1,9 +1,19 @@
 const pg = require('pg');
 const axios = require('axios');
 const AWS = require('aws-sdk');
+const twilio = require('twilio');
 
 AWS.config.update({ region: 'your-region' });
 const dynamoDB = new AWS.DynamoDB.DocumentClient();
+
+const TWILIO_ACCOUNT_SID = 'your-twilio-account-sid';
+const TWILIO_AUTH_TOKEN = 'your-twilio-auth-token';
+const TWILIO_CONVERSATION_SERVICE_SID = 'your-twilio-conversation-service-sid';
+
+const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+
+const AccessToken = twilio.jwt.AccessToken;
+const ChatGrant = AccessToken.ChatGrant;
 
 const pool = new pg.Pool({
     user: 'postgres',
@@ -27,7 +37,7 @@ const SENDER_ID = 'YOUR_SENDER_ID';
 const OTP_LENGTH = 6;
 
 const generateOtp = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString(); 
+    return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
 const sendOtp = async (mobileNumber, otp) => {
@@ -83,6 +93,14 @@ const userData = {
         const result = await pool.query(query.text, query.values);
         return result.rows[0];
     },
+    editProfile: async (mobile, name, email) => {
+        const query = {
+            text: 'UPDATE users SET name = $2, email = $3 WHERE phone_number = $1 RETURNING *',
+            values: [mobile, name, email]
+        };
+        const result = await pool.query(query.text, query.values);
+        return result.rows[0];
+    },
     getUserByEmailOrMob: async (emailOrMob) => {
         try {
             const query = {
@@ -91,7 +109,7 @@ const userData = {
             };
 
             const result = await pool.query(query.text, query.values);
-            if(result.rows[0].seller) {
+            if (result.rows[0].seller) {
                 const storeQuery = {
                     text: 'SELECT * FROM stores WHERE phone_number = $1',
                     values: [emailOrMob]
@@ -99,6 +117,14 @@ const userData = {
                 const storeResult = await pool.query(storeQuery.text, storeQuery.values);
                 result.rows[0].store = storeResult.rows[0];
             }
+
+            const deliveryAddressQuery = {
+                text: 'SELECT * from delivery_address WHERE user_id = $1',
+                values: [result.rows[0].id]
+            }
+
+            const delAdd = await pool.query(deliveryAddressQuery.text, deliveryAddressQuery.values);
+            result.rows[0].deliveryAddress = delAdd.rows;
             return result.rows[0];
         } catch (error) {
             console.error("Error in getUserByEmailOrMob: ", error);
@@ -142,7 +168,7 @@ const userData = {
                 userType: userType
             }
         }
-        
+
     },
     deRegisterUser: async (email) => {
         const query = {
@@ -162,13 +188,13 @@ const userData = {
         const storeDetails = {
             mobile, name, address, rating, reviews, gstnumber, gstnumber_url, pancard, pancard_url, fssai_license_number, fssai_cert_url, msme_license_number, msme_cert_url, dealer_cert_url, distributor_cert_url
         }
-        if(resubmit) {
+        if (resubmit) {
             await storesData.updateStore(storeDetails);
             await storesData.resetStatus(mobile);
         } else {
             await storesData.createStore(storeDetails);
         }
-        return {success: true};
+        return { success: true };
     },
     getUserType: async (mobile) => {
         const query = {
@@ -177,7 +203,7 @@ const userData = {
         };
         const result = await pool.query(query.text, query.values);
 
-        if(result.rows[0].seller_submission_status === 'rejected') {
+        if (result.rows[0].seller_submission_status === 'rejected') {
             let getCommentQuery = {
                 text: 'SELECT comments FROM stores WHERE phone_number = $1',
                 values: [mobile]
@@ -193,7 +219,7 @@ const userData = {
             values: ['pending']
         };
         const result = await pool.query(query.text, query.values);
-        for(let i = 0; i < result.rows.length; i++) {
+        for (let i = 0; i < result.rows.length; i++) {
             const storeResult = await storesData.getStore(result.rows[i].phone_number);
             result.rows[i].store = storeResult
         }
@@ -206,14 +232,14 @@ const userData = {
         };
         const result = await pool.query(query.text, query.values);
         return result.rows[0];
-    }, 
+    },
     getVerifiedSellers: async () => {
         const query = {
             text: 'SELECT * FROM users WHERE seller_submission_status = $1',
             values: ['verified']
         };
         const result = await pool.query(query.text, query.values);
-        for(let i = 0; i < result.rows.length; i++) {
+        for (let i = 0; i < result.rows.length; i++) {
             const storeResult = await storesData.getStore(result.rows[i].phone_number);
             result.rows[i].store = storeResult
         }
@@ -275,7 +301,7 @@ const categoriesData = {
             text: 'SELECT * FROM categories'
         };
         const categories = await pool.query(query);
-    
+
         for (let i = 0; i < categories.rows.length; i++) {
             const productsQuery = {
                 text: 'SELECT * FROM products WHERE category_id = $1 and verification_status = $2',
@@ -284,17 +310,17 @@ const categoriesData = {
             const products = await pool.query(productsQuery.text, productsQuery.values);
             categories.rows[i].products = products.rows;
             categories.rows[i].stores = [];
-    
+
             // Use a Set to track unique store IDs
             const uniqueStoreIds = new Set();
-    
+
             for (let j = 0; j < categories.rows[i].products.length; j++) {
                 const storeId = categories.rows[i].products[j].store_id;
-    
+
                 // Check if the store ID is already processed
                 if (!uniqueStoreIds.has(storeId)) {
                     uniqueStoreIds.add(storeId); // Mark this store ID as processed
-    
+
                     const storeQuery = {
                         text: 'SELECT * FROM stores WHERE id = $1',
                         values: [storeId]
@@ -306,7 +332,7 @@ const categoriesData = {
         }
         return categories.rows;
     }
-} 
+}
 
 const productsData = {
     createProduct: async (product) => {
@@ -326,7 +352,7 @@ const productsData = {
         };
         const store = await pool.query(query);
 
-        if(store.rows.length === 0) {
+        if (store.rows.length === 0) {
             return [];
         }
         const store_id = store.rows[0].id;
@@ -367,7 +393,7 @@ const productsData = {
     },
     getAllProducts: async (category) => {
         let query;
-        if(category === 'all' || !category) {
+        if (category === 'all' || !category) {
             query = {
                 text: 'SELECT * FROM products'
             };
@@ -377,9 +403,9 @@ const productsData = {
                 values: [category]
             }
             const categoryId = await pool.query(getCategoryIdQuery);
-            if(categoryId.rows.length === 0) {
+            if (categoryId.rows.length === 0) {
                 return [];
-            }            
+            }
             query = {
                 text: 'SELECT * FROM products WHERE category_id = $1',
                 values: [categoryId.rows[0].id]
@@ -424,13 +450,13 @@ const productsData = {
         return result.rows[0];
     },
     getVerifiedProducts: async (category) => {
-        if(category === 'all') {
+        if (category === 'all') {
             const query = {
                 text: 'SELECT * FROM products WHERE is_admin_verified = $1',
                 values: [true]
             };
             const result = await pool.query(query);
-            for(let i = 0; i < result.rows.length; i++) {
+            for (let i = 0; i < result.rows.length; i++) {
                 const categoryQuery = {
                     text: 'SELECT * FROM categories WHERE id = $1',
                     values: [result.rows[i].category_id]
@@ -456,7 +482,7 @@ const productsData = {
                 values: [category.rows[0].id, true]
             };
             const result = await pool.query(query);
-            for(let i = 0; i < result.rows.length; i++) {
+            for (let i = 0; i < result.rows.length; i++) {
                 result.rows[i].category = category.rows[0];
                 const storeQuery = {
                     text: 'SELECT * FROM stores WHERE id = $1',
@@ -469,16 +495,16 @@ const productsData = {
             return result.rows;
         }
 
-        
+
     },
     getUnverifiedProducts: async (category) => {
-        if(category === 'all') {
+        if (category === 'all') {
             const query = {
                 text: 'SELECT * FROM products WHERE is_admin_verified = $1',
                 values: [false]
             };
             const result = await pool.query(query);
-            for(let i = 0; i < result.rows.length; i++) {
+            for (let i = 0; i < result.rows.length; i++) {
                 const categoryQuery = {
                     text: 'SELECT * FROM categories WHERE id = $1',
                     values: [result.rows[i].category_id]
@@ -504,7 +530,7 @@ const productsData = {
                 values: [categoryRows.rows[0].id, false]
             };
             const result = await pool.query(query);
-            for(let i = 0; i < result.rows.length; i++) {
+            for (let i = 0; i < result.rows.length; i++) {
                 result.rows[i].category = categoryRows.rows[0];
                 const storeQuery = {
                     text: 'SELECT * FROM stores WHERE id = $1',
@@ -653,7 +679,7 @@ const wishlistData = {
             values: [mobile]
         };
         const user = await pool.query(userQuery.text, userQuery.values);
-        if(user.rows.length === 0) {
+        if (user.rows.length === 0) {
             return [];
         }
         const user_id = user.rows[0].id;
@@ -676,7 +702,7 @@ const wishlistData = {
             values: [mobile]
         };
         const user = await pool.query(userQuery.text, userQuery.values);
-        if(user.rows.length === 0) {
+        if (user.rows.length === 0) {
             return [];
         }
         const user_id = user.rows[0].id;
@@ -693,7 +719,7 @@ const wishlistData = {
             values: [mobile]
         };
         const user = await pool.query(userQuery.text, userQuery.values);
-        if(user.rows.length === 0) {
+        if (user.rows.length === 0) {
             return [];
         }
         const user_id = user.rows[0].id;
@@ -712,6 +738,32 @@ const wishlistData = {
     }
 }
 
+const reviewData = {
+    addReview: async (review) => {
+        const { name, product_id, rating, comments } = review;
+        const query = {
+            text: 'INSERT INTO reviews(user, product_id, rating, comments, date) VALUES($1, $2, $3, $4, $5) RETURNING *',
+            values: [name, product_id, rating, review, new Date()]
+        };
+        await pool.query(query);
+
+        const selectQuery = {
+            text: 'SELECT * FROM reviews WHERE product_id = $1',
+            values: [product_id]
+        };
+        const result = await pool.query(selectQuery);
+        return result.rows;
+    },
+    getReviews: async (product_id) => {
+        const query = {
+            text: 'SELECT * FROM reviews WHERE product_id = $1',
+            values: [product_id]
+        };
+        const result = await pool.query(query);
+        return result.rows;
+    }
+}
+
 const cartData = {
     addToCart: async (mobile, product_id, quantity) => {
         const userQuery = {
@@ -719,7 +771,7 @@ const cartData = {
             values: [mobile]
         };
         const user = await pool.query(userQuery.text, userQuery.values);
-        if(user.rows.length === 0) {
+        if (user.rows.length === 0) {
             return [];
         }
         const user_id = user.rows[0].id;
@@ -728,7 +780,7 @@ const cartData = {
             values: [user_id, product_id, quantity]
         };
         await pool.query(insertQuery);
-        
+
         const selectQuery = {
             text: 'SELECT * FROM cart WHERE user_id = $1',
             values: [user_id]
@@ -743,7 +795,7 @@ const cartData = {
             values: [mobile]
         };
         const user = await pool.query(userQuery.text, userQuery.values);
-        if(user.rows.length === 0) {
+        if (user.rows.length === 0) {
             return [];
         }
         const user_id = user.rows[0].id;
@@ -753,13 +805,20 @@ const cartData = {
         };
         const result = await pool.query(query);
 
-        for(let i = 0; i < result.rows.length; i++) {
+        for (let i = 0; i < result.rows.length; i++) {
             const productQuery = {
                 text: 'SELECT * FROM products WHERE id = $1',
                 values: [result.rows[i].product_id]
             };
             const product = await pool.query(productQuery.text, productQuery.values);
 
+            const storeQuery = {
+                text: 'SELECT * FROM stores WHERE id = $1',
+                values: [product.rows[0].store_id]
+            }
+            const store = await pool.query(storeQuery.text, storeQuery.values);
+            product.rows[0].store = store.rows[0];
+            
             const categoryQuery = {
                 text: 'SELECT * FROM categories WHERE id = $1',
                 values: [product.rows[0].category_id]
@@ -776,7 +835,7 @@ const cartData = {
             values: [mobile]
         };
         const user = await pool.query(userQuery.text, userQuery.values);
-        if(user.rows.length === 0) {
+        if (user.rows.length === 0) {
             return [];
         }
         const user_id = user.rows[0].id;
@@ -799,7 +858,7 @@ const cartData = {
             values: [mobile]
         };
         const user = await pool.query(userQuery.text, userQuery.values);
-        if(user.rows.length === 0) {
+        if (user.rows.length === 0) {
             return [];
         }
         const user_id = user.rows[0].id;
@@ -820,28 +879,28 @@ const cartData = {
 
 const orderData = {
     createOrder: async (order) => {
-        const { mobile, store_id, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery } = order;
+        const { mobile, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery } = order;
         const userQuery = {
             text: 'SELECT id FROM users WHERE phone_number = $1',
             values: [mobile]
         };
         const user = await pool.query(userQuery.text, userQuery.values);
-        if(user.rows.length === 0) {
+        if (user.rows.length === 0) {
             return [];
         }
         const user_id = user.rows[0].id;
         const query = {
-            text: 'INSERT INTO orders(user_id, store_id, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *',
-            values: [user_id, store_id, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery]
+            text: 'INSERT INTO orders(user_id, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
+            values: [user_id, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery]
         };
-        await pool.query(query);
+        const result = await pool.query(query);
 
-        const selectQuery = {
-            text: 'SELECT * FROM orders WHERE user_id = $1',
-            values: [user_id]
-        };
-        const result = await pool.query(selectQuery);
-        return result.rows;
+        // const selectQuery = {
+        //     text: 'SELECT * FROM orders WHERE user_id = $1',
+        //     values: [user_id]
+        // };
+        // const result = await pool.query(selectQuery);
+        return result.rows[0];
     },
     getOrders: async (mobile) => {
         const userQuery = {
@@ -849,7 +908,7 @@ const orderData = {
             values: [mobile]
         };
         const user = await pool.query(userQuery.text, userQuery.values);
-        if(user.rows.length === 0) {
+        if (user.rows.length === 0) {
             return [];
         }
         const user_id = user.rows[0].id;
@@ -858,22 +917,41 @@ const orderData = {
             values: [user_id]
         };
         const result = await pool.query(query);
+
+        for (let i = 0; i < result.rows.length; i++) {
+            const orderItemsQuery = {
+                text: 'SELECT * FROM order_items WHERE order_id = $1',
+                values: [result.rows[i].id]
+            };
+            const orderItems = await pool.query(orderItemsQuery.text, orderItemsQuery.values);
+
+            for (let j = 0; j < orderItems.rows.length; j++) {
+                const productQuery = {
+                    text: 'SELECT * FROM products WHERE id = $1',
+                    values: [orderItems.rows[j].product_id]
+                };
+                const product = await pool.query(productQuery.text, productQuery.values);
+                orderItems.rows[j].product = product.rows[0];
+            }
+            result.rows[i].orderItems = orderItems.rows;
+        }
+
         return result.rows;
     },
     updateOrder: async (order) => {
-        const { order_id, mobile, store_id, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery } = order;
+        const { order_id, mobile, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery } = order;
         const userQuery = {
             text: 'SELECT id FROM users WHERE phone_number = $1',
             values: [mobile]
         };
         const user = await pool.query(userQuery.text, userQuery.values);
-        if(user.rows.length === 0) {
+        if (user.rows.length === 0) {
             return [];
         }
         const user_id = user.rows[0].id;
         const query = {
-            text: 'UPDATE orders SET user_id = $2, store_id = $3, delivery_address_id = $4, payment_method = $5, total = $6, order_status = $7, payment_status = $8, transaction_id = $9, created_at = $10, expected_delivery = $11 WHERE id = $1 RETURNING *',
-            values: [order_id, user_id, store_id, delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery]
+            text: 'UPDATE orders SET user_id = $2, delivery_address_id = $4, payment_method = $5, total = $6, order_status = $7, payment_status = $8, transaction_id = $9, created_at = $10, expected_delivery = $11 WHERE id = $1 RETURNING *',
+            values: [order_id, user_id, '', delivery_address_id, payment_method, total, order_status, payment_status, transaction_id, created_at, expected_delivery]
         };
         await pool.query(query);
 
@@ -884,15 +962,19 @@ const orderData = {
         const result = await pool.query(selectQuery);
         return result.rows;
     },
-    deleteOrder: async (id) => {
+    cancelOrder: async (id) => {
         const query = {
-            text: 'DELETE FROM orders WHERE id = $1',
-            values: [id]
+            text: 'UPDATE orders SET order_status = $2 WHERE id = $1',
+            values: [id, 'cancelled']
         };
-        await pool.query(query);
+        const result1 = await pool.query(query);
+
+        console.log("result1 :: ", result1);
+
 
         const selectQuery = {
-            text: 'SELECT * FROM orders'
+            text: 'SELECT * FROM orders WHERE id = $1',
+            values: [id]
         };
         const result = await pool.query(selectQuery);
         return result.rows;
@@ -956,24 +1038,26 @@ const orderItemsData = {
 
 const deliveryAddressData = {
     createDeliveryAddress: async (delivery_address) => {
-        const { mobile, type, address_line_1, address_line_2, city, state, pincode, phone_number } = delivery_address;
+        const { mobile, type, address_line_1, address_line_2, city, state, pincode, phone_number, name } = delivery_address;
         const userQuery = {
             text: 'SELECT id FROM users WHERE phone_number = $1',
             values: [mobile]
         };
         const user = await pool.query(userQuery.text, userQuery.values);
-        if(user.rows.length === 0) {
+        if (user.rows.length === 0) {
             return [];
         }
         const user_id = user.rows[0].id;
+        console.log("user_id :: ", user_id);
+
         const query = {
-            text: 'INSERT INTO delivery_addresses(user_id, type, address_line_1, address_line_2, city, state, pincode, phone_number) VALUES($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-            values: [user_id, type, address_line_1, address_line_2, city, state, pincode, phone_number]
+            text: 'INSERT INTO delivery_address(user_id, type, address_line_1, address_line_2, city, state, pincode, phone_number, name) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
+            values: [user_id, type, address_line_1, address_line_2, city, state, pincode, phone_number, name]
         };
         await pool.query(query);
 
         const selectQuery = {
-            text: 'SELECT * FROM delivery_addresses WHERE user_id = $1',
+            text: 'SELECT * FROM delivery_address WHERE user_id = $1',
             values: [user_id]
         };
         const result = await pool.query(selectQuery);
@@ -985,36 +1069,36 @@ const deliveryAddressData = {
             values: [mobile]
         };
         const user = await pool.query(userQuery.text, userQuery.values);
-        if(user.rows.length === 0) {
+        if (user.rows.length === 0) {
             return [];
         }
         const user_id = user.rows[0].id;
         const query = {
-            text: 'SELECT * FROM delivery_addresses WHERE user_id = $1',
+            text: 'SELECT * FROM delivery_address WHERE user_id = $1',
             values: [user_id]
         };
         const result = await pool.query(query);
         return result.rows;
     },
     updateDeliveryAddress: async (delivery_address) => {
-        const { id, mobile, type, address_line_1, address_line_2, city, state, pincode, phone_number } = delivery_address;
+        const { id, mobile, type, address_line_1, address_line_2, city, state, pincode, phone_number, name } = delivery_address;
         const userQuery = {
             text: 'SELECT id FROM users WHERE phone_number = $1',
             values: [mobile]
         };
         const user = await pool.query(userQuery.text, userQuery.values);
-        if(user.rows.length === 0) {
+        if (user.rows.length === 0) {
             return [];
         }
         const user_id = user.rows[0].id;
         const query = {
-            text: 'UPDATE delivery_addresses SET user_id = $2, type = $3, address_line_1 = $4, address_line_2 = $5, city = $6, state = $7, pincode = $8, phone_number = $9 WHERE id = $1 RETURNING *',
-            values: [id, user_id, type, address_line_1, address_line_2, city, state, pincode, phone_number]
+            text: 'UPDATE delivery_address SET user_id = $2, type = $3, address_line_1 = $4, address_line_2 = $5, city = $6, state = $7, pincode = $8, phone_number = $9, name = $10 WHERE id = $1 RETURNING *',
+            values: [id, user_id, type, address_line_1, address_line_2, city, state, pincode, phone_number, name]
         };
         await pool.query(query);
 
         const selectQuery = {
-            text: 'SELECT * FROM delivery_addresses WHERE user_id = $1',
+            text: 'SELECT * FROM delivery_address WHERE user_id = $1',
             values: [user_id]
         };
         const result = await pool.query(selectQuery);
@@ -1022,13 +1106,13 @@ const deliveryAddressData = {
     },
     deleteDeliveryAddress: async (id) => {
         const query = {
-            text: 'DELETE FROM delivery_addresses WHERE id = $1',
+            text: 'DELETE FROM delivery_address WHERE id = $1',
             values: [id]
         };
         await pool.query(query);
 
         const selectQuery = {
-            text: 'SELECT * FROM delivery_addresses'
+            text: 'SELECT * FROM delivery_address'
         };
         const result = await pool.query(selectQuery);
         return result.rows;
@@ -1044,6 +1128,70 @@ const homeData = {
     }
 }
 
+const couponData = {
+    addCoupon: async (coupon) => {
+        const { store_id, coupon_code, type, value } = coupon;
+        const query = {
+            text: 'INSERT INTO coupons(store_id, coupon_code, type, value) VALUES($1, $2, $3, $4) RETURNING *',
+            values: [store_id, coupon_code, type, value]
+        };
+        await pool.query(query);
+
+        const selectQuery = {
+            text: 'SELECT * FROM coupons WHERE store_id = $1',
+            values: [store_id]
+        };
+        const result = await pool.query(selectQuery);
+        return result.rows;
+    },
+    getCoupons: async (store_id) => {
+        const query = {
+            text: 'SELECT * FROM coupons WHERE store_id = $1',
+            values: [store_id]
+        };
+        const result = await pool.query(query);
+        return result.rows;
+    },
+    editCoupon: async (coupon) => {
+        const { id, store_id, coupon_code, type, value } = coupon;
+        const query = {
+            text: 'UPDATE coupons SET store_id = $2, coupon_code = $3, type = $4, value = $5 WHERE id = $1 RETURNING *',
+            values: [id, store_id, coupon_code, type, value]
+        };
+        await pool.query(query);
+
+        const selectQuery = {
+            text: 'SELECT * FROM coupons WHERE store_id = $1',
+            values: [store_id]
+        };
+        const result = await pool.query(selectQuery);
+        return result.rows;
+    },
+    deleteCoupon: async (id, store_id) => {
+        const query = {
+            text: 'DELETE FROM coupons WHERE id = $1',
+            values: [id]
+        };
+        await pool.query(query);
+
+        const selectQuery = {
+            text: 'SELECT * FROM coupons WHERE store_id = $1',
+            values: [store_id]
+        };
+        const result = await pool.query(selectQuery);
+        return result.rows;
+    },
+    getCoupon: async (coupon_code) => {
+        const query = {
+            text: 'SELECT * FROM coupons WHERE coupon_code = $1',
+            values: [coupon_code]
+        };
+        const result = await pool.query(query);
+
+        return result.rows[0];
+    }
+}
+
 module.exports.handler = async (event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;
     const headers = {
@@ -1055,8 +1203,8 @@ module.exports.handler = async (event, context) => {
 
     try {
         const body = event ? event : null;
-        
-        if(!body || body === null){
+
+        if (!body || body === null) {
             return {
                 statusCode: 500,
                 body: { error: 'Empty body. Please check payload' }
@@ -1065,7 +1213,7 @@ module.exports.handler = async (event, context) => {
 
         const { path } = body;
 
-        if(path === '/add/cart') {
+        if (path === '/add/cart') {
             try {
                 const { mobile, product_id, quantity } = body;
                 const result = await cartData.addToCart(mobile, product_id, quantity);
@@ -1081,7 +1229,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/search/products') {
+        } else if (path === '/search/products') {
             try {
                 const { search } = body;
                 const result = await productsData.searchProducts(search);
@@ -1097,7 +1245,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if( path === '/get/cart') {
+        } else if (path === '/get/cart') {
             try {
                 const { mobile } = body;
                 const result = await cartData.getCart(mobile);
@@ -1113,7 +1261,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/update/cart') {
+        } else if (path === '/update/cart') {
             try {
                 const { mobile, product_id, quantity } = body;
                 const result = await cartData.updateCart(mobile, product_id, quantity);
@@ -1129,7 +1277,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if( path === '/remove/cart') {
+        } else if (path === '/remove/cart') {
             try {
                 const { mobile, product_id } = body;
                 const result = await cartData.removeFromCart(mobile, product_id);
@@ -1145,7 +1293,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/create/category') {
+        } else if (path === '/create/category') {
             try {
                 const category = body;
                 const result = await categoriesData.createCategory(category);
@@ -1161,7 +1309,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/categories') {
+        } else if (path === '/get/categories') {
             try {
                 const result = await categoriesData.getCategories();
                 return {
@@ -1176,7 +1324,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/categories-details') {
+        } else if (path === '/get/categories-details') {
             try {
                 const result = await categoriesData.getCategoriesDetails();
                 return {
@@ -1191,7 +1339,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/update/category') {
+        } else if (path === '/update/category') {
             try {
                 const category = body;
                 const result = await categoriesData.updateCategory(category);
@@ -1207,7 +1355,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/delete/category') {
+        } else if (path === '/delete/category') {
             try {
                 const { id } = body;
                 const result = await categoriesData.deleteCategory(id);
@@ -1223,7 +1371,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/add/deliveryAddress') {
+        } else if (path === '/add/deliveryAddress') {
             try {
                 const deliveryAddress = body;
                 const result = await deliveryAddressData.createDeliveryAddress(deliveryAddress);
@@ -1239,7 +1387,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/deliveryAddress') {
+        } else if (path === '/get/deliveryAddress') {
             try {
                 const { user_id } = body;
                 const result = await deliveryAddressData.getDeliveryAddresses(user_id);
@@ -1255,7 +1403,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if( path === '/update/deliveryAddress') {
+        } else if (path === '/update/deliveryAddress') {
             try {
                 const deliveryAddress = body;
                 const result = await deliveryAddressData.updateDeliveryAddress(deliveryAddress);
@@ -1271,7 +1419,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if( path === '/remove/deliveryAddress') {
+        } else if (path === '/remove/deliveryAddress') {
             try {
                 const { id } = body;
                 const result = await deliveryAddressData.deleteDeliveryAddress(id);
@@ -1287,7 +1435,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/add/orderItem') {
+        } else if (path === '/add/orderItem') {
             try {
                 const orderItems = body;
                 const result = await orderItemsData.createOrderItem(orderItems);
@@ -1303,7 +1451,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/orderItem') {
+        } else if (path === '/get/orderItem') {
             try {
                 const { order_id } = body;
                 const result = await orderItemsData.getOrderItems(order_id);
@@ -1319,7 +1467,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if( path === '/update/orderItem') {
+        } else if (path === '/update/orderItem') {
             try {
                 const orderItems = body;
                 const result = await orderItemsData.updateOrderItem(orderItems);
@@ -1335,7 +1483,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/remove/orderItem') {
+        } else if (path === '/remove/orderItem') {
             try {
                 const { order_id } = body;
                 const result = await orderItemsData.deleteOrderItem(order_id);
@@ -1351,10 +1499,36 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/add/order') {
+        } else if (path === '/add/order') {
             try {
-                const orders = body;
-                const result = await orderData.createOrder(orders);
+                const order = body;
+                const result = await orderData.createOrder(order);
+                for (let i = 0; i < order.order_items.length; i++) {
+                    const orderItem = {
+                        order_id: result.id,
+                        product_id: order.order_items[i].product_id,
+                        quantity: order.order_items[i].quantity,
+                        price: order.order_items[i].price
+                    }
+                    await orderItemsData.createOrderItem(orderItem);
+                }
+
+                return {
+                    statusCode: 200,
+                    headers,
+                    sucess: true
+                }
+            } catch (error) {
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: error
+                }
+            }
+        } else if (path === '/get/order') {
+            try {
+                const { mobile } = body;
+                const result = await orderData.getOrders(mobile);
                 return {
                     statusCode: 200,
                     headers,
@@ -1367,26 +1541,19 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/order') {
-            try {
-                const { user_id } = body;
-                const result = await orderData.updateOrder(user_id);
-                return {
-                    statusCode: 200,
-                    headers,
-                    body: result
-                }
-            } catch (error) {
-                return {
-                    statusCode: 500,
-                    headers,
-                    body: error
-                }
-            }
-        } else if(path === '/update/order') {
+        } else if (path === '/update/order') {
             try {
                 const orders = body;
                 const result = await orderData.updateOrder(orders);
+                for (let i = 0; i < orders.order_items.length; i++) {
+                    const orderItem = {
+                        order_id: orders.id,
+                        product_id: orders.order_items[i].product_id,
+                        quantity: orders.order_items[i].quantity,
+                        price: orders.order_items[i].price
+                    }
+                    await orderItemsData.updateOrderItem(orderItem);
+                }
                 return {
                     statusCode: 200,
                     headers,
@@ -1399,10 +1566,10 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if( path === '/remove/order') {
+        } else if (path === '/cancel/order') {
             try {
                 const { order_id } = body;
-                const result = await orderData.deleteOrder(order_id);
+                const result = await orderData.cancelOrder(order_id);
                 return {
                     statusCode: 200,
                     headers,
@@ -1415,22 +1582,22 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if( path === '/create/product') {
+        } else if (path === '/create/product') {
             try {
                 const product = body;
                 const result = await productsData.createProduct(product);
-                if(result) {
+                if (result) {
                     return {
-                    statusCode: 200,
-                    headers,
-                    body: {success: true}
-                }
+                        statusCode: 200,
+                        headers,
+                        body: { success: true }
+                    }
                 } else {
                     return {
-                    statusCode: 200,
-                    headers,
-                    body: {success: false}
-                }
+                        statusCode: 200,
+                        headers,
+                        body: { success: false }
+                    }
                 }
             } catch (error) {
                 return {
@@ -1439,7 +1606,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/accept/product') {
+        } else if (path === '/accept/product') {
             try {
                 const { id } = body;
                 const result = await productsData.acceptProduct(id);
@@ -1455,7 +1622,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/reject/product') {
+        } else if (path === '/reject/product') {
             try {
                 const { id, comments } = body;
                 const result = await productsData.rejectProduct(id, comments);
@@ -1471,7 +1638,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/products') {
+        } else if (path === '/get/products') {
             try {
                 const { category } = body;
                 const result = await productsData.getAllProducts(category);
@@ -1488,21 +1655,21 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/update/product') {
+        } else if (path === '/update/product') {
             try {
                 const product = body;
                 const result = await productsData.updateProduct(product);
-                if(result) {
+                if (result) {
                     return {
-                    statusCode: 200,
-                    headers,
-                    body: {success: true}
-                }
+                        statusCode: 200,
+                        headers,
+                        body: { success: true }
+                    }
                 } else {
                     return {
                         statusCode: 200,
                         headers,
-                        body: {success: false}
+                        body: { success: false }
                     }
                 }
             } catch (error) {
@@ -1512,7 +1679,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/product') {
+        } else if (path === '/get/product') {
             try {
                 const { id } = body;
                 const result = await productsData.getProduct(id);
@@ -1528,21 +1695,21 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/delete/product') {
+        } else if (path === '/delete/product') {
             try {
                 const { id } = body;
                 const result = await productsData.deleteProduct(id);
-                if(result) {
+                if (result) {
                     return {
                         statusCode: 200,
                         headers,
-                        body: {success: true}
+                        body: { success: true }
                     }
                 } else {
                     return {
                         statusCode: 200,
                         headers,
-                        body: {success: false}
+                        body: { success: false }
                     }
                 }
             } catch (error) {
@@ -1552,7 +1719,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/products/for/seller') {
+        } else if (path === '/get/products/for/seller') {
             try {
                 const { mobile } = body;
                 const result = await productsData.getProductsForSeller(mobile);
@@ -1568,7 +1735,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/unverified/products') {
+        } else if (path === '/get/unverified/products') {
             const { category } = body;
             const result = await productsData.getUnverifiedProducts(category);
             return {
@@ -1576,7 +1743,7 @@ module.exports.handler = async (event, context) => {
                 headers,
                 body: result
             }
-        } else if(path === '/get/verified/products') {
+        } else if (path === '/get/verified/products') {
             const { category } = body;
             const result = await productsData.getVerifiedProducts(category);
             return {
@@ -1584,7 +1751,7 @@ module.exports.handler = async (event, context) => {
                 headers,
                 body: result
             }
-        } else if(path === '/get/verified/sellers') {
+        } else if (path === '/get/verified/sellers') {
             try {
                 const result = await userData.getVerifiedSellers();
                 return {
@@ -1599,7 +1766,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/unverified/sellers') {
+        } else if (path === '/get/unverified/sellers') {
             try {
                 const result = await userData.getUnverifiedSellers();
                 return {
@@ -1614,7 +1781,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/create/store') {
+        } else if (path === '/create/store') {
             try {
                 const store = body;
                 const result = await storesData.createStore(store);
@@ -1630,7 +1797,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/stores') {
+        } else if (path === '/get/stores') {
             try {
                 const result = await storesData.getStores();
                 return {
@@ -1645,7 +1812,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/update/store') {
+        } else if (path === '/update/store') {
             try {
                 const store = body;
                 const result = await storesData.updateStore(store);
@@ -1661,7 +1828,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/delete/store') {
+        } else if (path === '/delete/store') {
             try {
                 const { id } = body;
                 const result = await storesData.deleteStore(id);
@@ -1677,7 +1844,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/accept/seller') {
+        } else if (path === '/accept/seller') {
             try {
                 const { mobile } = body;
                 const result = await storesData.acceptSeller(mobile);
@@ -1693,7 +1860,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/reject/seller') {
+        } else if (path === '/reject/seller') {
             try {
                 const { mobile, comments } = body;
                 const result = await storesData.rejectSeller(mobile, comments);
@@ -1709,7 +1876,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/user/onboarding') {
+        } else if (path === '/user/onboarding') {
             try {
                 const user = body;
                 const result = await userData.registerUser(user);
@@ -1726,23 +1893,23 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/login/user') {
-            try {                
+        } else if (path === '/login/user') {
+            try {
                 const { emailOrMob, password } = body;
                 const user = await userData.getUserByEmailOrMob(emailOrMob);
-                
+
                 if (user.password === password) {
                     return {
-                    statusCode: 200,
-                    headers,
-                    body: user
-                }
+                        statusCode: 200,
+                        headers,
+                        body: user
+                    }
                 } else {
                     return {
-                    statusCode: 401,
-                    headers,
-                    body: 'Invalid password'
-                }
+                        statusCode: 401,
+                        headers,
+                        body: 'Invalid password'
+                    }
                 }
             } catch (error) {
                 return {
@@ -1751,7 +1918,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/send/otp') {
+        } else if (path === '/send/otp') {
             try {
                 const { mobile } = body;
                 // await userData.sendOTP(mobile);
@@ -1767,7 +1934,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/verify/otp') {
+        } else if (path === '/verify/otp') {
             try {
                 const { mobile, otp } = body;
                 const result = await userData.verifyOTP(mobile, otp);
@@ -1784,7 +1951,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/deregister/user') {
+        } else if (path === '/deregister/user') {
             try {
                 const { email } = body;
                 const result = await userData.deRegisterUser(email);
@@ -1800,7 +1967,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/user') {
+        } else if (path === '/get/user') {
             try {
                 const { mobile } = body;
                 const result = await userData.getUserByEmailOrMob(mobile);
@@ -1817,7 +1984,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/register/seller') {
+        } else if (path === '/register/seller') {
             try {
                 const seller = body;
                 const result = await userData.registerSeller(seller);
@@ -1834,7 +2001,24 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/user-type') {
+        } else if (path === '/edit/profile') {
+            try {
+                const { mobile, name, email } = body;
+                const result = await userData.editProfile(mobile, name, email);
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: result
+                }
+            } catch (error) {
+                console.log("Error: ", error);
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: error
+                }
+            }
+        } else if (path === '/get/user-type') {
             try {
                 const { mobile } = body;
                 const result = await userData.getUserType(mobile);
@@ -1851,7 +2035,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/submitted-sellers') {
+        } else if (path === '/get/submitted-sellers') {
             try {
                 const result = await userData.getSubmittedSellers();
                 return {
@@ -1867,7 +2051,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/seller-submitted-details') {
+        } else if (path === '/get/seller-submitted-details') {
             try {
                 const { mobile } = body;
                 const result = await userData.getSellerSubmittedDetails(mobile);
@@ -1884,7 +2068,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/create/wishlist') {
+        } else if (path === '/create/wishlist') {
             try {
                 const { mobile, product_id } = body;
                 const result = await wishlistData.addToWishlist(mobile, product_id);
@@ -1900,7 +2084,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/wishlist') {
+        } else if (path === '/get/wishlist') {
             try {
                 const { mobile } = body;
                 const result = await wishlistData.getWishlist(mobile);
@@ -1916,7 +2100,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/delete/wishlist') {
+        } else if (path === '/delete/wishlist') {
             try {
                 const { mobile, product_id } = body;
                 const result = await wishlistData.removeFromWishlist(mobile, product_id);
@@ -1932,7 +2116,7 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else if(path === '/get/home') {
+        } else if (path === '/get/home') {
             try {
                 const result = await homeData.getHome();
                 return {
@@ -1947,7 +2131,155 @@ module.exports.handler = async (event, context) => {
                     body: error
                 }
             }
-        } else {
+        } else if (path === '/add/coupon') {
+            try {
+                const coupon = body;
+                const result = await couponData.addCoupon(coupon);
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: result
+                }
+            } catch (error) {
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: error
+                }
+            }
+        } else if (path === '/edit/coupon') {
+            try {
+                const coupon = body;
+                const result = await couponData.editCoupon(coupon);
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: result
+                }
+            } catch (error) {
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: error
+                }
+            }
+        } else if (path === '/delete/coupon') {
+            try {
+                const { id, store_id } = body;
+                const result = await couponData.deleteCoupon(id, store_id);
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: result
+                }
+            } catch (error) {
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: error
+                }
+            }
+        } else if (path === '/get/coupons') {
+            try {
+                const { store_id } = body;
+                const result = await couponData.getCoupons(store_id);
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: result
+                }
+            } catch (error) {
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: error
+                }
+            }
+        } else if (path === '/get/coupon') {
+            try {
+                const { id } = body;
+                const result = await couponData.getCoupon(id);
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: result
+                }
+            } catch (error) {
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: error
+                }
+            }
+        } else if (path === '/create-conversation') {
+            const { buyerId, sellerId } = body;
+            try {
+                const conversation = await twilioClient.conversations.v1.conversations.create({
+                    friendlyName: `chat_${buyerId}_${sellerId}`
+                });
+
+                res.json({ conversationSid: conversation.sid });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        } else if (path === '/add-participant') {
+            const { conversationSid, userIdentity } = body;
+            try {
+                await client.conversations.v1.conversations(conversationSid)
+                    .participants
+                    .create({ identity: userIdentity });
+
+                res.json({ message: 'Participant added successfully' });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        } else if (path === '/token') {
+            const { userId } = body;
+
+            const token = new AccessToken(
+                accountSid,
+                TWILIO_API_KEY,
+                TWILIO_API_SECRET,
+                { identity: userId }
+            );
+
+            token.addGrant(new ChatGrant({ serviceSid }));
+
+            res.json({ token: token.toJwt() });
+        } else if(path === '/add/review') {
+            try {
+                const review = body;
+                const result = await reviewData.addReview(review);
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: result
+                }
+            } catch (error) {
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: error
+                }
+            }
+        } else if(path === '/get/reviews') {
+            try {
+                const {product_id} = body;
+                const result = await reviewData.getReviews(product_id);
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: result
+                }
+            } catch (error) {
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: error
+                }
+            }
+        }
+        else {
             return {
                 statusCode: 500,
                 body: { error: 'Invalid path. Please check payload' }
